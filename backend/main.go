@@ -84,30 +84,38 @@ func envOr(k, def string) string {
 	return def
 }
 
-// k8sClient builds an HTTPS client trusting the in-cluster CA, plus the SA token.
-func k8sClient() (*http.Client, string, error) {
+// k8sClient builds a client for the Kubernetes API and returns it with the
+// bearer token and base URL. In-cluster it trusts the mounted CA and uses the SA
+// token. For local testing, set KUBE_API (e.g. http://localhost:8001 from
+// `kubectl proxy`) — no TLS/token needed.
+func k8sClient() (*http.Client, string, string, error) {
+	if base := os.Getenv("KUBE_API"); base != "" {
+		return &http.Client{Timeout: 10 * time.Second}, "", strings.TrimRight(base, "/"), nil
+	}
 	ca, err := os.ReadFile(caPath)
 	if err != nil {
-		return nil, "", fmt.Errorf("read ca: %w", err)
+		return nil, "", "", fmt.Errorf("read ca: %w", err)
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(ca) {
-		return nil, "", fmt.Errorf("parse ca")
+		return nil, "", "", fmt.Errorf("parse ca")
 	}
 	token, err := os.ReadFile(tokenPath)
 	if err != nil {
-		return nil, "", fmt.Errorf("read token: %w", err)
+		return nil, "", "", fmt.Errorf("read token: %w", err)
 	}
 	client := &http.Client{
 		Timeout:   10 * time.Second,
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}},
 	}
-	return client, strings.TrimSpace(string(token)), nil
+	return client, strings.TrimSpace(string(token)), apiHost, nil
 }
 
-func discover(client *http.Client, token string) ([]Route, error) {
-	req, _ := http.NewRequest(http.MethodGet, apiHost+httpRoutesPath, nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+func discover(client *http.Client, token, baseURL string) ([]Route, error) {
+	req, _ := http.NewRequest(http.MethodGet, baseURL+httpRoutesPath, nil)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -160,13 +168,13 @@ func main() {
 	interval := 30 * time.Second
 
 	s := &store{}
-	client, token, err := k8sClient()
+	client, token, baseURL, err := k8sClient()
 	if err != nil {
 		log.Printf("warning: no in-cluster config (%v) — discovery disabled", err)
 	} else {
 		go func() {
 			for {
-				if routes, err := discover(client, token); err != nil {
+				if routes, err := discover(client, token, baseURL); err != nil {
 					log.Printf("discover: %v", err)
 				} else {
 					s.set(routes)

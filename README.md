@@ -32,15 +32,24 @@ metadata:
     megascope.petzko.sh/hidden: "true"       # exclude from the portal
 ```
 
-## Develop
+## Develop / test locally
+
+The backend reads the cluster API the in-cluster way, so on a laptop point it at
+your cluster via `kubectl proxy` (sets `KUBE_API` — no TLS/token needed):
 
 ```bash
-# terminal A — backend (needs a kubeconfig; discovery is skipped if absent)
-cd backend && go run .            # :8080
+# terminal A — proxy the cluster API (uses your kubeconfig)
+kubectl proxy --port=8001
 
-# terminal B — frontend (proxies /api -> :8080)
-cd frontend && npm install && npm run dev
+# terminal B — backend, talking to the proxy
+cd backend && KUBE_API=http://localhost:8001 go run .        # :8080, real routes
+
+# terminal C — frontend (proxies /api -> :8080)
+cd frontend && npm install && npm run dev                    # open the printed URL
 ```
+
+Without `KUBE_API` and outside the cluster, the backend still serves but
+discovery is disabled (empty portal) — fine for checking the UI.
 
 ## Build
 
