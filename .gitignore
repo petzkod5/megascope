@@ -1,0 +1,18 @@
+# node / frontend
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# go / backend
+/megascope
+backend/megascope
+*.test
+
+# served build output (copied in the image)
+web/
+
+# misc
+.DS_Store
+*.log
+.env
+.env.*
