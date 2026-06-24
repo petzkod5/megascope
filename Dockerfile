@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ── Stage 2: build the Go backend (static binary) ─────────────────────────────
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS backend
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS backend
 WORKDIR /src
 COPY backend/go.mod ./
 COPY backend/ ./
