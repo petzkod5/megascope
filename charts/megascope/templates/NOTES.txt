@@ -1,0 +1,32 @@
+megascope is deploying as {{ include "megascope.fullname" . }} in namespace {{ .Release.Namespace }}.
+
+{{- if .Values.httproute.enabled }}
+
+Served via Gateway API HTTPRoute at:
+{{- range .Values.httproute.hostnames }}
+  http://{{ . }}
+{{- end }}
+  (make sure httproute.parentRefs points at a real Gateway in your cluster)
+{{- else if .Values.ingress.enabled }}
+
+Served via Ingress at:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+
+No HTTPRoute or Ingress is enabled. Reach the portal with a port-forward:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "megascope.fullname" . }} 8080:{{ .Values.service.port }}
+  open http://localhost:8080
+{{- end }}
+
+Health probing is {{ if .Values.config.probeHealth }}ON{{ else }}OFF{{ end }} and the cluster is labelled "{{ .Values.config.clusterName }}".
+{{- if not .Values.rbac.create }}
+
+WARNING: rbac.create is false — megascope needs a ClusterRole granting read on
+httproutes + nodes/pods/namespaces, or discovery and the health summary will be empty.
+{{- end }}
+
+Customise any app's tile by annotating its HTTPRoute:
+  app.megascope.io/name | /group | /icon | /url | /hidden

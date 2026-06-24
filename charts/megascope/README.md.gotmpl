@@ -1,0 +1,133 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.deprecationWarning" . }}
+
+{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+
+{{ template "chart.description" . }}
+
+{{ template "chart.homepageLine" . }}
+
+A command-center homepage for any Kubernetes cluster. megascope auto-discovers
+Gateway API **HTTPRoutes** and renders each app as a status-led tile, with a live
+cluster-health bar, per-route health probes, a discovery feed, and a per-app
+detail view. No manual config — new routes appear on their own.
+
+## TL;DR
+
+```bash
+helm install megascope ./charts/megascope \
+  --namespace megascope --create-namespace \
+  --set image.repository=ghcr.io/your-org/megascope \
+  --set 'httproute.parentRefs[0].name=gateway' \
+  --set 'httproute.parentRefs[0].namespace=gateway' \
+  --set 'httproute.hostnames[0]=megascope.example.com'
+```
+
+> megascope needs a published image. Build and push one first:
+> `docker build -t ghcr.io/your-org/megascope:latest . && docker push ghcr.io/your-org/megascope:latest`
+
+## Prerequisites
+
+- Kubernetes 1.23+
+- The **Gateway API** CRDs and a Gateway (if using `httproute.enabled`, the
+  default). Otherwise set `httproute.enabled=false` and use `ingress.enabled=true`.
+- Helm 3.8+
+
+## Installing
+
+```bash
+helm install megascope ./charts/megascope -n megascope --create-namespace -f my-values.yaml
+```
+
+A minimal `my-values.yaml`:
+
+```yaml
+image:
+  repository: ghcr.io/your-org/megascope
+  tag: latest
+
+config:
+  clusterName: rivendell
+
+httproute:
+  parentRefs:
+    - name: traefik-gateway
+      namespace: traefik
+      sectionName: web
+  hostnames:
+    - megascope.home.local
+```
+
+## Exposing the portal
+
+Pick **one** of:
+
+- **Gateway API HTTPRoute** (default, `httproute.enabled=true`) — preferred, and
+  it makes megascope appear in its own portal. Point `httproute.parentRefs` at
+  your Gateway.
+- **Ingress** (`ingress.enabled=true`, set `httproute.enabled=false`) — for
+  clusters using an Ingress controller instead of Gateway API.
+- **Neither** — port-forward the Service for local access (see `helm install` notes).
+
+## How megascope customises tiles
+
+Annotate any app's `HTTPRoute` (all optional):
+
+| Annotation                | Purpose                                   |
+| ------------------------- | ----------------------------------------- |
+| `app.megascope.io/name`   | Display name (default: route name)        |
+| `app.megascope.io/group`  | Category heading                          |
+| `app.megascope.io/icon`   | lucide icon name (e.g. `chart-spline`) or emoji |
+| `app.megascope.io/url`    | Link override (default: `http://<host>`)  |
+| `app.megascope.io/hidden` | `"true"` to exclude from the portal       |
+
+## Metrics
+
+The backend exposes Prometheus metrics at `GET /metrics` (route status & latency,
+cluster summary, scan duration). To scrape it, add the usual annotations via
+`podAnnotations`:
+
+```yaml
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: /metrics
+```
+
+## High availability
+
+megascope is stateless (each pod keeps its own discovery cache), so you can scale
+the web layer freely:
+
+```yaml
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+```
+
+## NetworkPolicy
+
+Set `networkPolicy.enabled=true` (needs a CNI that enforces them). The defaults
+allow ingress to the http port and egress for DNS + the API server + common probe
+ports; override `networkPolicy.ingress` / `networkPolicy.egress` to tighten.
+
+## Uninstalling
+
+```bash
+helm uninstall megascope -n megascope
+```
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}
+
+{{ template "chart.maintainersSection" . }}
+
+{{ template "chart.sourcesSection" . }}
+
+{{ template "helm-docs.versionFooter" . }}

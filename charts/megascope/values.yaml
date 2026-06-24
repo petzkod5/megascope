@@ -1,0 +1,178 @@
+# Default values for megascope.
+# This is a YAML-formatted file. Declare variables to be passed into templates.
+
+# -- Number of replicas. megascope's discovery cache is per-pod, so a single
+# replica is plenty; scale up only for HA of the (stateless) web layer.
+replicaCount: 1
+
+image:
+  # -- Image repository. Publish your own (`docker build -t <repo> .`) or point
+  # at a registry mirror.
+  repository: ghcr.io/your-org/megascope
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+  # -- Image tag. Defaults to the chart's `appVersion` when empty.
+  tag: ""
+
+# -- Image pull secrets for private registries.
+imagePullSecrets: []
+# -- Override the chart name (used in resource names).
+nameOverride: ""
+# -- Override the fully-qualified app name (used in resource names).
+fullnameOverride: ""
+
+config:
+  # -- Cluster name shown in the top bar and health panel.
+  clusterName: production
+  # -- Probe each discovered route's URL to derive status (up/warn/down) and
+  # latency. Set to `false` to disable active probing.
+  probeHealth: true
+  # -- Discovery scan interval, in seconds.
+  pollSeconds: 30
+  # -- Extra environment variables, in raw container `env` form
+  # (e.g. `- name: FOO` / `value: bar`, or `valueFrom:`).
+  extraEnv: []
+
+serviceAccount:
+  # -- Create a ServiceAccount for megascope.
+  create: true
+  # -- Annotations to add to the ServiceAccount.
+  annotations: {}
+  # -- Name of the ServiceAccount. Generated from the fullname when empty.
+  name: ""
+
+rbac:
+  # -- Create the read-only ClusterRole + ClusterRoleBinding megascope needs
+  # (HTTPRoutes for discovery; nodes/pods/namespaces for the health summary).
+  # Disable if you manage RBAC out-of-band.
+  create: true
+
+# -- Annotations added to the Pod.
+podAnnotations: {}
+# -- Labels added to the Pod.
+podLabels: {}
+
+# -- Pod-level security context.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container-level security context. megascope runs read-only with no extra
+# capabilities.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  # -- Service type.
+  type: ClusterIP
+  # -- Service port.
+  port: 80
+
+# Expose megascope via a Gateway API HTTPRoute (preferred — it's also what
+# megascope discovers). megascope creates an HTTPRoute for itself so it shows up
+# in its own portal.
+httproute:
+  # -- Create an HTTPRoute for megascope.
+  enabled: true
+  # -- Annotations on the HTTPRoute. The `app.megascope.io/*` ones customise
+  # megascope's own tile.
+  annotations:
+    app.megascope.io/name: Megascope
+    app.megascope.io/group: Platform
+    app.megascope.io/icon: "◎"
+  # -- `parentRefs` for the HTTPRoute — point these at your Gateway.
+  parentRefs:
+    - name: gateway
+      namespace: gateway
+      sectionName: web
+  # -- Hostnames megascope is served on.
+  hostnames:
+    - megascope.example.com
+
+# Alternatively (or additionally) expose megascope via a classic Ingress.
+ingress:
+  # -- Create an Ingress.
+  enabled: false
+  # -- IngressClass name.
+  className: ""
+  # -- Annotations for the Ingress.
+  annotations: {}
+  # -- Ingress hosts and their paths.
+  hosts:
+    - host: megascope.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- TLS configuration for the Ingress.
+  tls: []
+
+# -- Resource requests and limits.
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 64Mi
+
+# -- Liveness probe (override the whole block to customise).
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 3
+  periodSeconds: 15
+# -- Readiness probe (override the whole block to customise).
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 2
+  periodSeconds: 10
+
+# Horizontal Pod Autoscaler. megascope is stateless, so scaling the web layer is
+# safe (each replica keeps its own discovery cache). When enabled, the
+# Deployment's static replicaCount is dropped so the HPA owns the replica count.
+autoscaling:
+  # -- Enable a HorizontalPodAutoscaler.
+  enabled: false
+  # -- Minimum replicas.
+  minReplicas: 1
+  # -- Maximum replicas.
+  maxReplicas: 3
+  # -- Target average CPU utilization (%). Empty disables the CPU metric.
+  targetCPUUtilizationPercentage: 80
+  # -- Target average memory utilization (%). Empty disables the memory metric.
+  targetMemoryUtilizationPercentage: ""
+
+podDisruptionBudget:
+  # -- Create a PodDisruptionBudget (only meaningful with >1 replica).
+  enabled: false
+  # -- Minimum available pods (mutually exclusive with maxUnavailable).
+  minAvailable: 1
+  # -- Maximum unavailable pods. Set this OR minAvailable, not both.
+  maxUnavailable: ""
+
+networkPolicy:
+  # -- Create a NetworkPolicy. Requires a CNI that enforces them (Cilium,
+  # Calico, …).
+  enabled: false
+  # -- Ingress rules. When empty, a default rule allows traffic to the http port
+  # from any source (so your Gateway/Ingress can reach it).
+  ingress: []
+  # -- Egress rules. When empty, a default allows DNS plus TCP 80/443/6443/8080
+  # (megascope must reach the API server and probe route hosts). Tighten as
+  # needed for your environment.
+  egress: []
+
+# -- Node selector for pod scheduling.
+nodeSelector: {}
+# -- Tolerations for pod scheduling.
+tolerations: []
+# -- Affinity rules for pod scheduling.
+affinity: {}

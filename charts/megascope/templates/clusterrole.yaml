@@ -1,0 +1,32 @@
+{{- if .Values.rbac.create -}}
+# Read-only access for discovery (HTTPRoutes) and the cluster health summary
+# (nodes / pods / namespaces). megascope only ever reads.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "megascope.fullname" . }}
+  labels:
+    {{- include "megascope.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "namespaces"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "megascope.fullname" . }}
+  labels:
+    {{- include "megascope.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "megascope.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "megascope.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
