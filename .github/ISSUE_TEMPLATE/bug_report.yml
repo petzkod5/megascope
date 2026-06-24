@@ -1,0 +1,41 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Deploy with ...
+        2. Open ...
+        3. See ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: megascope version / image tag
+      placeholder: "e.g. v0.1.0 or sha-abc1234"
+    validations:
+      required: false
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Kubernetes version, Gateway implementation (Traefik/Istio/Cilium/…), how it's exposed (HTTPRoute/Ingress).
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Backend pod logs and/or browser console output.
+      render: shell
