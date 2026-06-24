@@ -1,25 +1,50 @@
 version: 2
+# Stay current on everything. Minor/patch updates are grouped per ecosystem to
+# cut PR noise; major updates come as individual PRs so a breaking one stays
+# isolated. The dependabot-auto-merge workflow merges anything that passes CI,
+# so green updates (incl. majors) land on their own and breaking ones wait for a
+# code fix. Nothing is ignored.
 updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     labels: ["dependencies", "ci"]
+    groups:
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: npm
     directory: "/frontend"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     labels: ["dependencies", "frontend"]
+    groups:
+      frontend-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: gomod
     directory: "/backend"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     labels: ["dependencies", "backend"]
+    groups:
+      backend-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
     directory: "/"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     labels: ["dependencies", "docker"]
+    groups:
+      docker-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

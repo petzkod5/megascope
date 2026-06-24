@@ -1,0 +1,21 @@
+name: dependabot-auto-merge
+
+# Enable auto-merge on Dependabot PRs. Combined with the required status checks
+# on main, GitHub merges each PR only once CI is green — so green updates land on
+# their own and breaking ones stay open until the code is fixed.
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
