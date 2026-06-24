@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { Panel } from "../components/Panel";
 import { Badge } from "../components/Badge";
 import { StatReadout } from "../components/StatReadout";
