@@ -49,21 +49,17 @@ export function TopBar({
       }}
     >
       <div onClick={goHome} style={{ display: "flex", alignItems: "center", gap: 11, cursor: "pointer" }}>
-        <span
+        <img
+          src="/favicon.png"
+          alt="megascope"
+          width={30}
+          height={30}
           style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 30,
-            height: 30,
-            background: "var(--accent)",
-            color: "var(--text-on-accent)",
-            borderRadius: "var(--radius-xs)",
+            display: "block",
+            borderRadius: "50%",
             boxShadow: "var(--glow-accent)",
           }}
-        >
-          <Ico name="radar" size={18} stroke={2.4} />
-        </span>
+        />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.05 }}>
           <span style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, letterSpacing: "0.04em", color: "var(--text-primary)" }}>
             MEGASCOPE
