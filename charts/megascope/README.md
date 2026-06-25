@@ -1,6 +1,6 @@
 # megascope
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.0](https://img.shields.io/badge/AppVersion-0.1.0-informational?style=flat-square)
+![Version: 0.2.0](https://img.shields.io/badge/Version-0.2.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.2.0](https://img.shields.io/badge/AppVersion-0.2.0-informational?style=flat-square)
 
 A self-hosted, auto-discovering homepage/portal for any Kubernetes cluster — it surfaces every Gateway API HTTPRoute as a command-center dashboard with live health.
 
@@ -89,6 +89,28 @@ Annotate any app's `HTTPRoute` (all optional):
 | `app.megascope.io/url`    | Link override (default: `http://<host>`)  |
 | `app.megascope.io/hidden` | `"true"` to exclude from the portal       |
 
+## Custom links
+
+Beyond auto-discovered routes, users can add their own links from the UI — click
+**Add link**, give it a name, URL (anything, including services outside the
+cluster), an optional group, and pick an icon. Links render as tiles alongside
+discovered apps and can be edited or removed (right-click a link tile → **Edit…**).
+
+By default custom links are kept in memory and are lost when the pod restarts. To
+persist and share them across everyone using the portal, enable a PersistentVolume:
+
+```yaml
+persistence:
+  enabled: true
+  size: 64Mi
+  # storageClass: ""   # uses the cluster default
+```
+
+The claim is `ReadWriteOnce`, which a single pod can mount, so keep `replicaCount: 1`
+and leave `autoscaling.enabled: false` (or provide a `ReadWriteMany` `storageClass`)
+when persistence is on. The backend writes `links.json` under `persistence.mountPath`
+(`/data` by default) as the non-root user (fsGroup `65532`).
+
 ## Metrics
 
 The backend exposes Prometheus metrics at `GET /metrics` (route status & latency,
@@ -163,12 +185,19 @@ helm uninstall megascope -n megascope
 | networkPolicy.enabled | bool | `false` | Create a NetworkPolicy. Requires a CNI that enforces them (Cilium, Calico, …). |
 | networkPolicy.ingress | list | `[]` | Ingress rules. When empty, a default rule allows traffic to the http port from any source (so your Gateway/Ingress can reach it). |
 | nodeSelector | object | `{}` | Node selector for pod scheduling. |
+| persistence.accessMode | string | `"ReadWriteOnce"` | Access mode for the created PVC. |
+| persistence.enabled | bool | `false` | Persist custom links to a PersistentVolume. The default ReadWriteOnce claim cannot be shared across pods, so keep replicaCount=1 and autoscaling disabled when this is on (or supply a ReadWriteMany storageClass). |
+| persistence.existingClaim | string | `""` | Use an existing PersistentVolumeClaim instead of creating one. |
+| persistence.mountPath | string | `"/data"` | Mount path for the links data. LINKS_FILE is set to <mountPath>/links.json. |
+| persistence.size | string | `"64Mi"` | Storage requested for the created PVC. |
+| persistence.storageClass | string | `""` | StorageClass for the created PVC. "" uses the cluster default. |
 | podAnnotations | object | `{}` | Annotations added to the Pod. |
 | podDisruptionBudget.enabled | bool | `false` | Create a PodDisruptionBudget (only meaningful with >1 replica). |
 | podDisruptionBudget.maxUnavailable | string | `""` | Maximum unavailable pods. Set this OR minAvailable, not both. |
 | podDisruptionBudget.minAvailable | int | `1` | Minimum available pods (mutually exclusive with maxUnavailable). |
 | podLabels | object | `{}` | Labels added to the Pod. |
-| podSecurityContext | object | `{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}` | Pod-level security context. |
+| podSecurityContext | object | `{"fsGroup":65532,"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}` | Pod-level security context. |
+| podSecurityContext.fsGroup | int | `65532` | fsGroup so a mounted PVC is group-writable by the distroless nonroot user (uid/gid 65532). Harmless when no volume is mounted. |
 | rbac.create | bool | `true` | Create the read-only ClusterRole + ClusterRoleBinding megascope needs (HTTPRoutes for discovery; nodes/pods/namespaces for the health summary). Disable if you manage RBAC out-of-band. |
 | readinessProbe | object | `{"httpGet":{"path":"/healthz","port":"http"},"initialDelaySeconds":2,"periodSeconds":10}` | Readiness probe (override the whole block to customise). |
 | replicaCount | int | `1` | Number of replicas. megascope's discovery cache is per-pod, so a single replica is plenty; scale up only for HA of the (stateless) web layer. |

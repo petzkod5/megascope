@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Route, State, Status } from "./types";
+import type { Route, State, Status, CustomLink } from "./types";
 import { TopBar } from "./views/TopBar";
 import { HealthBar } from "./views/HealthBar";
 import { TileGrid } from "./views/TileGrid";
@@ -8,6 +8,9 @@ import { AppDetail } from "./views/AppDetail";
 import { Settings } from "./views/Settings";
 import { Ico } from "./components/Ico";
 import { IconButton } from "./components/IconButton";
+import { Button } from "./components/Button";
+import { LinkModal } from "./views/LinkModal";
+import { createLink, updateLink, deleteLink, type LinkInput } from "./api";
 
 const POLL_MS = 15_000;
 const HISTORY_CAP = 48;
@@ -76,6 +79,7 @@ export function App() {
   const [now, setNow] = useState(() => Date.now());
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem("ms-view") === "list" ? "list" : "grid"));
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [linkModal, setLinkModal] = useState<{ mode: "create" } | { mode: "edit"; link: CustomLink } | null>(null);
 
   // Per-route latency history, accumulated client-side across polls (the backend
   // doesn't persist a time series), feeding the detail sparkline.
@@ -142,6 +146,7 @@ export function App() {
 
   const cluster = data?.cluster;
   const routes = data?.routes ?? [];
+  const links = data?.links ?? [];
 
   const queryFiltered = useMemo(() => {
     if (!query) return routes;
@@ -155,6 +160,17 @@ export function App() {
     );
   }, [query, routes]);
 
+  const linksFiltered = useMemo(() => {
+    if (!query) return links;
+    const q = query.toLowerCase();
+    return links.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        (l.group || "").toLowerCase().includes(q) ||
+        l.url.toLowerCase().includes(q)
+    );
+  }, [query, links]);
+
   const counts = useMemo(() => {
     const by = (s: Status) => queryFiltered.filter((r) => r.status === s).length;
     return { all: queryFiltered.length, up: by("up"), warn: by("warn"), down: by("down") } as Record<StatusFilter, number>;
@@ -164,6 +180,21 @@ export function App() {
     () => (statusFilter === "all" ? queryFiltered : queryFiltered.filter((r) => r.status === statusFilter)),
     [queryFiltered, statusFilter]
   );
+
+  // Links carry no health, so a status filter (up/warn/down) hides them; they
+  // show only under "All".
+  const visibleLinks = statusFilter === "all" ? linksFiltered : [];
+
+  const applyLinks = (next: CustomLink[]) => setData((prev) => (prev ? { ...prev, links: next } : prev));
+  const submitLink = async (b: LinkInput) => {
+    const next = linkModal && linkModal.mode === "edit" ? await updateLink(linkModal.link.id, b) : await createLink(b);
+    applyLinks(next);
+    setLinkModal(null);
+  };
+  const removeLink = async (id: string) => {
+    applyLinks(await deleteLink(id));
+    setLinkModal(null);
+  };
 
   const downCount = routes.filter((r) => r.status === "down").length;
   const lastScan = data ? Math.max(0, Math.round((now - data.updated_at) / 1000)) : 0;
@@ -220,6 +251,7 @@ export function App() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>
                     {visible.length} {visible.length === 1 ? "route" : "routes"}
+                    {visibleLinks.length ? ` · ${visibleLinks.length} ${visibleLinks.length === 1 ? "link" : "links"}` : ""}
                   </span>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <StatusChips value={statusFilter} onChange={setStatusFilter} counts={counts} />
@@ -231,9 +263,12 @@ export function App() {
                         <Ico name="list" size={15} />
                       </IconButton>
                     </div>
+                    <Button size="sm" variant="secondary" icon={<Ico name="plus" size={14} />} onClick={() => setLinkModal({ mode: "create" })}>
+                      Add link
+                    </Button>
                   </div>
                 </div>
-                <TileGrid routes={visible} onOpen={open} view={viewMode} />
+                <TileGrid routes={visible} links={visibleLinks} onOpen={open} onEditLink={(l) => setLinkModal({ mode: "edit", link: l })} view={viewMode} />
               </div>
               <div style={{ position: "sticky", top: 78 }}>
                 <DiscoveryFeed activity={data.activity} lastScan={lastScan} />
@@ -254,6 +289,16 @@ export function App() {
         )}
 
         {view === "settings" && <Settings onBack={goHome} />}
+
+        {linkModal && (
+          <LinkModal
+            mode={linkModal.mode}
+            initial={linkModal.mode === "edit" ? linkModal.link : undefined}
+            onClose={() => setLinkModal(null)}
+            onSubmit={submitLink}
+            onDelete={linkModal.mode === "edit" ? () => removeLink(linkModal.link.id) : undefined}
+          />
+        )}
       </main>
     </div>
   );

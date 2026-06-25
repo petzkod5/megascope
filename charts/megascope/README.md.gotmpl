@@ -91,6 +91,28 @@ Annotate any app's `HTTPRoute` (all optional):
 | `app.megascope.io/url`    | Link override (default: `http://<host>`)  |
 | `app.megascope.io/hidden` | `"true"` to exclude from the portal       |
 
+## Custom links
+
+Beyond auto-discovered routes, users can add their own links from the UI — click
+**Add link**, give it a name, URL (anything, including services outside the
+cluster), an optional group, and pick an icon. Links render as tiles alongside
+discovered apps and can be edited or removed (right-click a link tile → **Edit…**).
+
+By default custom links are kept in memory and are lost when the pod restarts. To
+persist and share them across everyone using the portal, enable a PersistentVolume:
+
+```yaml
+persistence:
+  enabled: true
+  size: 64Mi
+  # storageClass: ""   # uses the cluster default
+```
+
+The claim is `ReadWriteOnce`, which a single pod can mount, so keep `replicaCount: 1`
+and leave `autoscaling.enabled: false` (or provide a `ReadWriteMany` `storageClass`)
+when persistence is on. The backend writes `links.json` under `persistence.mountPath`
+(`/data` by default) as the non-root user (fsGroup `65532`).
+
 ## Metrics
 
 The backend exposes Prometheus metrics at `GET /metrics` (route status & latency,

@@ -33,6 +33,25 @@ config:
   # (e.g. `- name: FOO` / `value: bar`, or `valueFrom:`).
   extraEnv: []
 
+# Persist user-added custom links so they survive restarts and are shared by
+# everyone using the portal. When disabled, links live in memory only (added at
+# runtime, shared while the pod lives, lost on restart).
+persistence:
+  # -- Persist custom links to a PersistentVolume. The default ReadWriteOnce
+  # claim cannot be shared across pods, so keep replicaCount=1 and autoscaling
+  # disabled when this is on (or supply a ReadWriteMany storageClass).
+  enabled: false
+  # -- Mount path for the links data. LINKS_FILE is set to <mountPath>/links.json.
+  mountPath: /data
+  # -- Use an existing PersistentVolumeClaim instead of creating one.
+  existingClaim: ""
+  # -- StorageClass for the created PVC. "" uses the cluster default.
+  storageClass: ""
+  # -- Access mode for the created PVC.
+  accessMode: ReadWriteOnce
+  # -- Storage requested for the created PVC.
+  size: 64Mi
+
 serviceAccount:
   # -- Create a ServiceAccount for megascope.
   create: true
@@ -57,6 +76,9 @@ podSecurityContext:
   runAsNonRoot: true
   seccompProfile:
     type: RuntimeDefault
+  # -- fsGroup so a mounted PVC is group-writable by the distroless nonroot
+  # user (uid/gid 65532). Harmless when no volume is mounted.
+  fsGroup: 65532
 
 # -- Container-level security context. megascope runs read-only with no extra
 # capabilities.

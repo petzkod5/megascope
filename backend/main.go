@@ -19,12 +19,16 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -43,6 +47,12 @@ const (
 	activityMax    = 24
 	warnLatencyMs  = 800
 	historyCap     = 32
+
+	maxLinks    = 200
+	maxNameLen  = 120
+	maxURLLen   = 2048
+	maxIconLen  = 64
+	maxGroupLen = 64
 )
 
 // ParentRef is a Gateway (or other parent) an HTTPRoute attaches to.
@@ -99,6 +109,17 @@ type State struct {
 	Activity    []Activity `json:"activity"`
 	UpdatedAt   int64      `json:"updated_at"`
 	Discovering bool       `json:"discovering"`
+	Links       []Link     `json:"links"`
+}
+
+// Link is a user-defined custom link (a bookmark tile), persisted server-side
+// and shared by everyone using the portal. Unlike Route it carries no health.
+type Link struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	URL   string `json:"url"`
+	Icon  string `json:"icon,omitempty"`
+	Group string `json:"group,omitempty"`
 }
 
 type store struct {
@@ -118,6 +139,181 @@ func (s *store) snapshot() (State, int64, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.state, s.scanMs, s.ok
+}
+
+// ---- custom links (file-backed) --------------------------------------------
+
+var errTooManyLinks = errors.New("link limit reached")
+
+type linkStore struct {
+	mu    sync.RWMutex
+	path  string // "" => in-memory only (no persistence)
+	links []Link
+}
+
+// newLinkStore loads existing links from path (best-effort; a missing file is
+// fine, a parse error logs and starts empty). path "" disables persistence.
+func newLinkStore(path string) *linkStore {
+	s := &linkStore{path: path}
+	if path == "" {
+		return s
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("links: read %s: %v", path, err)
+		}
+		return s
+	}
+	var ls []Link
+	if err := json.Unmarshal(b, &ls); err != nil {
+		log.Printf("links: parse %s: %v", path, err)
+		return s
+	}
+	s.links = ls
+	return s
+}
+
+func (s *linkStore) list() []Link {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]Link{}, s.links...)
+}
+
+// persist atomically writes links to disk (temp file + rename). No-op when path is "".
+func (s *linkStore) persist(links []Link) error {
+	if s.path == "" {
+		return nil
+	}
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".links-*.json")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	enc := json.NewEncoder(tmp)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(links); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp.Name(), s.path); err != nil {
+		return err
+	}
+	// Best-effort fsync of the parent directory so the rename (the new directory
+	// entry) survives a crash/power loss; failure here doesn't undo the write.
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
+}
+
+// add appends an already-normalized link (with ID set). Memory is updated only
+// after a successful persist, so disk and memory never diverge.
+func (s *linkStore) add(l Link) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.links) >= maxLinks {
+		return errTooManyLinks
+	}
+	next := append(append([]Link{}, s.links...), l)
+	if err := s.persist(next); err != nil {
+		return err
+	}
+	s.links = next
+	return nil
+}
+
+// update replaces the link whose ID == l.ID. Returns found=false if absent.
+func (s *linkStore) update(l Link) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := append([]Link{}, s.links...)
+	idx := -1
+	for i := range next {
+		if next[i].ID == l.ID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return false, nil
+	}
+	next[idx] = l
+	if err := s.persist(next); err != nil {
+		return false, err
+	}
+	s.links = next
+	return true, nil
+}
+
+// remove deletes the link with the given id. Returns found=false if absent.
+func (s *linkStore) remove(id string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := make([]Link, 0, len(s.links))
+	found := false
+	for _, l := range s.links {
+		if l.ID == id {
+			found = true
+			continue
+		}
+		next = append(next, l)
+	}
+	if !found {
+		return false, nil
+	}
+	if err := s.persist(next); err != nil {
+		return false, err
+	}
+	s.links = next
+	return true, nil
+}
+
+func randID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 16)
+	}
+	return hex.EncodeToString(b[:])
+}
+
+// normalizeLink trims/validates a client-supplied link. The ID is assigned by
+// the caller (add) or carried from the path (update). A scheme-less URL gets
+// https:// prepended so users can type "grafana.example.com".
+func normalizeLink(in Link) (Link, error) {
+	name := strings.TrimSpace(in.Name)
+	raw := strings.TrimSpace(in.URL)
+	icon := strings.TrimSpace(in.Icon)
+	group := strings.TrimSpace(in.Group)
+	if name == "" {
+		return Link{}, errors.New("name is required")
+	}
+	if raw == "" {
+		return Link{}, errors.New("url is required")
+	}
+	if len(name) > maxNameLen || len(raw) > maxURLLen || len(icon) > maxIconLen || len(group) > maxGroupLen {
+		return Link{}, errors.New("field too long")
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return Link{}, errors.New("invalid url")
+	}
+	return Link{Name: name, URL: u.String(), Icon: icon, Group: group}, nil
 }
 
 func envOr(k, def string) string {
@@ -598,6 +794,78 @@ func renderMetrics(st State, ok bool, scanMs int64) string {
 	return b.String()
 }
 
+func writeLinks(w http.ResponseWriter, ls *linkStore, code int) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string][]Link{"links": ls.list()})
+}
+
+func registerLinkRoutes(mux *http.ServeMux, ls *linkStore) {
+	mux.HandleFunc("GET /api/links", func(w http.ResponseWriter, _ *http.Request) {
+		writeLinks(w, ls, http.StatusOK)
+	})
+	mux.HandleFunc("POST /api/links", func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		var in Link
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		l, err := normalizeLink(in)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		l.ID = randID()
+		if err := ls.add(l); err != nil {
+			if errors.Is(err, errTooManyLinks) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+			} else {
+				http.Error(w, "save failed", http.StatusInternalServerError)
+			}
+			return
+		}
+		writeLinks(w, ls, http.StatusCreated)
+	})
+	mux.HandleFunc("PUT /api/links/{id}", func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		var in Link
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		l, err := normalizeLink(in)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		l.ID = r.PathValue("id")
+		ok, err := ls.update(l)
+		if err != nil {
+			http.Error(w, "save failed", http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		writeLinks(w, ls, http.StatusOK)
+	})
+	mux.HandleFunc("DELETE /api/links/{id}", func(w http.ResponseWriter, r *http.Request) {
+		ok, err := ls.remove(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "save failed", http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		writeLinks(w, ls, http.StatusOK)
+	})
+}
+
 func main() {
 	addr := envOr("ADDR", ":8080")
 	webDir := envOr("WEB_DIR", "./web")
@@ -611,6 +879,7 @@ func main() {
 	}
 
 	s := &store{}
+	links := newLinkStore(envOr("LINKS_FILE", ""))
 	k, err := newK8s()
 	if err != nil {
 		log.Printf("warning: no in-cluster config (%v) — discovery disabled", err)
@@ -675,6 +944,10 @@ func main() {
 			st.Cluster.Name = clusterName
 		}
 		st.Discovering = ok
+		st.Links = links.list()
+		if st.Links == nil {
+			st.Links = []Link{}
+		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		json.NewEncoder(w).Encode(st)
@@ -686,6 +959,8 @@ func main() {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Write([]byte(renderMetrics(st, ok, scanMs)))
 	})
+
+	registerLinkRoutes(mux, links)
 
 	// Serve the built SPA, with a fallback to index.html for client routing.
 	fileServer := http.FileServer(http.Dir(webDir))

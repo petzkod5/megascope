@@ -27,6 +27,18 @@
         "extraEnv": { "type": "array" }
       }
     },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "mountPath": { "type": "string" },
+        "existingClaim": { "type": "string" },
+        "storageClass": { "type": "string" },
+        "accessMode": { "type": "string" },
+        "size": { "type": "string" }
+      }
+    },
     "serviceAccount": {
       "type": "object",
       "additionalProperties": false,

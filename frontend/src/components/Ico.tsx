@@ -12,6 +12,10 @@ import {
   ExternalLink,
   Copy,
   Info,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
   type LucideProps,
 } from "lucide-react";
 import dynamicIconImports from "lucide-react/dynamicIconImports";
@@ -37,6 +41,10 @@ const STATIC: Record<string, ComponentType<LucideProps>> = {
   "external-link": ExternalLink,
   copy: Copy,
   info: Info,
+  plus: Plus,
+  pencil: Pencil,
+  "trash-2": Trash2,
+  x: X,
 };
 
 const loaders = dynamicIconImports as unknown as Record<
