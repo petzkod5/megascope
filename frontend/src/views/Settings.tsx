@@ -118,7 +118,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
             <span style={{ color: "var(--text-muted)" }}>access</span> &nbsp;read-only ClusterRole
           </span>
           <span>
-            <span style={{ color: "var(--text-muted)" }}>image</span> &nbsp;ghcr.io/your-org/megascope:latest
+            <span style={{ color: "var(--text-muted)" }}>image</span> &nbsp;ghcr.io/petzkod5/megascope:latest
           </span>
         </div>
       </Panel>

@@ -6,9 +6,9 @@
 replicaCount: 1
 
 image:
-  # -- Image repository. Publish your own (`docker build -t <repo> .`) or point
-  # at a registry mirror.
-  repository: ghcr.io/your-org/megascope
+  # -- Image repository. Defaults to the chart's published image; override to
+  # point at a fork's image or a registry mirror.
+  repository: ghcr.io/petzkod5/megascope
   # -- Image pull policy.
   pullPolicy: IfNotPresent
   # -- Image tag. Defaults to the chart's `appVersion` when empty.

@@ -120,10 +120,13 @@ CI builds and publishes the image automatically. The
 `ghcr.io/<owner>/megascope` on every push to `main` (tagged `latest`) and on
 version tags (`vX.Y.Z`). Pull requests build only.
 
+On `v*` tags the [`chart-publish`](.github/workflows/build.yml) job also packages the
+Helm chart and pushes it to `oci://ghcr.io/<owner>/charts/megascope` (chart version = tag).
+
 To build locally:
 
 ```bash
-docker build -t ghcr.io/your-org/megascope:latest .
+docker build -t ghcr.io/petzkod5/megascope:latest .
 ```
 
 ## Deploy (Helm)
@@ -134,8 +137,16 @@ megascope ships as a parameterized Helm chart in [`charts/megascope`](charts/meg
 ```bash
 helm install megascope ./charts/megascope \
   --namespace megascope --create-namespace \
-  --set image.repository=ghcr.io/your-org/megascope \
-  --set image.tag=latest \
+  --set 'httproute.parentRefs[0].name=<your-gateway>' \
+  --set 'httproute.parentRefs[0].namespace=<gateway-ns>' \
+  --set 'httproute.hostnames[0]=megascope.example.com'
+```
+
+Or install straight from the published OCI chart (no clone needed):
+
+```bash
+helm install megascope oci://ghcr.io/petzkod5/charts/megascope \
+  --version <X.Y.Z> --namespace megascope --create-namespace \
   --set 'httproute.parentRefs[0].name=<your-gateway>' \
   --set 'httproute.parentRefs[0].namespace=<gateway-ns>' \
   --set 'httproute.hostnames[0]=megascope.example.com'
