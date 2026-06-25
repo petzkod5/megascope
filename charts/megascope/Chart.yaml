@@ -3,9 +3,9 @@ name: megascope
 description: A self-hosted, auto-discovering homepage/portal for any Kubernetes cluster — it surfaces every Gateway API HTTPRoute as a command-center dashboard with live health.
 type: application
 # version: chart version, bumped on every chart change.
-version: 0.2.0 # x-release-please-version
+version: 0.3.0 # x-release-please-version
 # appVersion: the megascope app/image version this chart deploys by default.
-appVersion: "0.2.0" # x-release-please-version
+appVersion: "0.3.0" # x-release-please-version
 home: https://github.com/petzkod5/megascope
 sources:
   - https://github.com/petzkod5/megascope
