@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/petzkod5/megascope/compare/v0.2.0...v0.3.0) (2026-06-25)
+
+
+### Features
+
+* add user-defined custom links with optional shared persistence ([#28](https://github.com/petzkod5/megascope/issues/28)) ([596f2f1](https://github.com/petzkod5/megascope/commit/596f2f1fea51548d608664fb9752ecd23bd1c8e5))
+
 ## [0.2.0](https://github.com/petzkod5/megascope/compare/v0.1.1...v0.2.0) (2026-06-25)
 
 
