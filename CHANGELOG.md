@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/petzkod5/megascope/compare/v0.1.1...v0.2.0) (2026-06-25)
+
+
+### Features
+
+* replace placeholder mark with dragon icon ([#26](https://github.com/petzkod5/megascope/issues/26)) ([728098c](https://github.com/petzkod5/megascope/commit/728098c631c2d54e0c11b0ebd772592e308de3f5))
+
 ## [0.1.1](https://github.com/petzkod5/megascope/compare/v0.1.0...v0.1.1) (2026-06-25)
 
 
