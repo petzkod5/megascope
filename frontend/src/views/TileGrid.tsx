@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Ico } from "../components/Ico";
 import { AppTile } from "../components/AppTile";
+import { ContextMenu } from "../components/ContextMenu";
 import type { Route } from "../types";
 
 export function TileGrid({
@@ -13,6 +14,8 @@ export function TileGrid({
   view?: "grid" | "list";
 }) {
   const columns = view === "list" ? "1fr" : "repeat(auto-fill, minmax(258px, 1fr))";
+  const [menu, setMenu] = useState<{ route: Route; x: number; y: number } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
   const groups = useMemo(() => {
     const m = new Map<string, Route[]>();
     for (const r of routes) {
@@ -55,15 +58,44 @@ export function TileGrid({
                 status={r.status}
                 latency={r.latency}
                 icon={r.icon ? <Ico name={r.icon} size={17} /> : null}
+                href={r.url || undefined}
                 onClick={(e) => {
+                  if (!r.url) {
+                    e.preventDefault();
+                    onOpen(r);
+                  }
+                }}
+                onContextMenu={(e) => {
                   e.preventDefault();
-                  onOpen(r);
+                  setMenu({ route: r, x: e.clientX, y: e.clientY });
                 }}
               />
             ))}
           </div>
         </section>
       ))}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={closeMenu}
+          items={[
+            {
+              label: "Open app",
+              icon: <Ico name="external-link" size={14} />,
+              disabled: !menu.route.url,
+              onSelect: () => {
+                if (menu.route.url) window.open(menu.route.url, "_blank", "noreferrer");
+              },
+            },
+            {
+              label: "Details",
+              icon: <Ico name="info" size={14} />,
+              onSelect: () => onOpen(menu.route),
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }
