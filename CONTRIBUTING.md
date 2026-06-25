@@ -59,5 +59,26 @@ helm-docs --chart-search-root=charts --template-files=README.md.gotmpl
 - Keep changes cluster-agnostic — no hardcoded cluster/gateway/registry names.
 - Small, focused PRs with a clear description are easiest to review.
 
+### Commit messages & releases
+
+Releases are automated by [`release.yml`](.github/workflows/release.yml) using
+[release-please](https://github.com/googleapis/release-please). It reads the
+[Conventional Commits](https://www.conventionalcommits.org/) that land on `main`
+and keeps an open **release PR** that bumps the version + `CHANGELOG.md`; merging
+that PR tags the release and publishes the image + chart.
+
+- `feat:` — a new feature → **minor** bump (`0.1.0` → `0.2.0`).
+- `fix:` / `perf:` — a bug/perf fix → **patch** bump (`0.1.0` → `0.1.1`).
+- A `BREAKING CHANGE:` footer or a `!` (e.g. `feat!:`) → also a **minor** bump
+  while pre-1.0 (we stay in 0.x until an intentional `1.0.0`).
+- `chore:`, `ci:`, `docs:`, `refactor:`, `test:`, `build:`, `style:` → no release.
+
+**Never bump versions by hand** — `charts/megascope/Chart.yaml` and
+`frontend/package.json` (+ lockfile) are updated by release-please in the release
+PR. (The rendered `charts/megascope/README.md` badges come from `helm-docs`, not
+release-please; regenerate them as noted above.) When **squash-merging** a
+feature/fix PR, the squash commit title must be a conventional message: it is
+what release-please reads to compute the next version.
+
 By contributing you agree your contributions are licensed under the project's
 [MIT License](LICENSE).

@@ -123,6 +123,15 @@ version tags (`vX.Y.Z`). Pull requests build only.
 On `v*` tags the [`chart-publish`](.github/workflows/build.yml) job also packages the
 Helm chart and pushes it to `oci://ghcr.io/<owner>/charts/megascope` (chart version = tag).
 
+Versioning and releases are automated with
+[release-please](https://github.com/googleapis/release-please). Pushes to `main`
+run the [`release`](.github/workflows/release.yml) workflow, which maintains a
+**release PR** that bumps the version files and `CHANGELOG.md` from
+[Conventional Commits](https://www.conventionalcommits.org/). Merging that PR
+cuts the `vX.Y.Z` tag + GitHub Release and publishes the image and chart above —
+all with the default `GITHUB_TOKEN` (no personal access token, and the version
+bump goes through the reviewed release PR rather than a direct push to `main`).
+
 To build locally:
 
 ```bash

@@ -2,6 +2,8 @@ name: build
 
 # Build the megascope image and publish it to GitHub Container Registry.
 # Pushes happen on main and on version tags; pull requests build only (no push).
+# release.yml calls this workflow (workflow_call) with the released version to
+# publish the image + chart with the default GITHUB_TOKEN (no PAT needed).
 on:
   push:
     branches: [main]
@@ -9,6 +11,18 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: Optional version (X.Y.Z) to also tag the image and publish the chart. Leave empty to just rebuild latest.
+        required: false
+        default: ""
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: Release version (X.Y.Z) to tag the image and chart with.
+        required: true
+        type: string
 
 # Publish to ghcr.io/<owner>/megascope — works for any fork without changes.
 env:
@@ -16,7 +30,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.ref }}-${{ inputs.version }}
   cancel-in-progress: true
 
 jobs:
@@ -44,6 +58,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # When called by release.yml the trigger ref is main (not a tag), so the
+      # semver tag patterns below produce nothing — derive the version tags here.
+      - name: Derive release version tags
+        id: relver
+        if: inputs.version != ''
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          echo "full=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "minor=${VERSION%.*}" >> "$GITHUB_OUTPUT"
+
       - name: Derive image tags and labels
         id: meta
         uses: docker/metadata-action@v6
@@ -56,6 +81,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.relver.outputs.full }},enable=${{ inputs.version != '' }}
+            type=raw,value=${{ steps.relver.outputs.minor }},enable=${{ inputs.version != '' }}
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -70,8 +97,9 @@ jobs:
 
   chart-publish:
     name: publish chart
-    # Release-driven: only on v* tags. Chart version/appVersion come from the tag.
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Release-driven: on v* tags (manual) or when called by release.yml with a
+    # version. Chart version/appVersion come from the tag or the input.
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.version != '' }}
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -84,9 +112,17 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v5
 
-      - name: Derive chart version from tag
+      - name: Derive chart version from input or tag
         id: ver
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Log in to GHCR (Helm)
         env:

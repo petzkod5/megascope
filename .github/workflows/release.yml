@@ -1,0 +1,55 @@
+name: release
+
+# Automated, conventional-commit-driven releases via release-please.
+#
+# On each push to main, release-please maintains a "release PR" that bumps the
+# version files (Chart.yaml, frontend/package.json + lock) and CHANGELOG.md.
+# Merging that PR creates the vX.Y.Z tag + GitHub Release; the publish job then
+# builds and publishes the image + chart by calling build.yml.
+#
+# No PAT and no protected-branch bypass: the version bump lands through the
+# reviewed release PR, and the default GITHUB_TOKEN drives everything. Because a
+# GITHUB_TOKEN-created tag does NOT trigger other workflows, build.yml is invoked
+# directly via workflow_call rather than relying on the tag push.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release-please
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      version: ${{ steps.release.outputs.version }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    name: publish release artifacts
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.release-please.outputs.version }}
