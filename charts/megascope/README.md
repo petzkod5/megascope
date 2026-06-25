@@ -16,14 +16,23 @@ detail view. No manual config — new routes appear on their own.
 ```bash
 helm install megascope ./charts/megascope \
   --namespace megascope --create-namespace \
-  --set image.repository=ghcr.io/your-org/megascope \
   --set 'httproute.parentRefs[0].name=gateway' \
   --set 'httproute.parentRefs[0].namespace=gateway' \
   --set 'httproute.hostnames[0]=megascope.example.com'
 ```
 
+Or install straight from the OCI registry (no clone needed):
+
+```bash
+helm install megascope oci://ghcr.io/petzkod5/charts/megascope \
+  --version <X.Y.Z> --namespace megascope --create-namespace \
+  --set 'httproute.parentRefs[0].name=<your-gateway>' \
+  --set 'httproute.parentRefs[0].namespace=<gateway-ns>' \
+  --set 'httproute.hostnames[0]=megascope.example.com'
+```
+
 > megascope needs a published image. Build and push one first:
-> `docker build -t ghcr.io/your-org/megascope:latest . && docker push ghcr.io/your-org/megascope:latest`
+> `docker build -t ghcr.io/petzkod5/megascope:latest . && docker push ghcr.io/petzkod5/megascope:latest`
 
 ## Prerequisites
 
@@ -42,7 +51,7 @@ A minimal `my-values.yaml`:
 
 ```yaml
 image:
-  repository: ghcr.io/your-org/megascope
+  repository: ghcr.io/petzkod5/megascope
   tag: latest
 
 config:
@@ -140,7 +149,7 @@ helm uninstall megascope -n megascope
 | httproute.hostnames | list | `["megascope.example.com"]` | Hostnames megascope is served on. |
 | httproute.parentRefs | list | `[{"name":"gateway","namespace":"gateway","sectionName":"web"}]` | `parentRefs` for the HTTPRoute — point these at your Gateway. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
-| image.repository | string | `"ghcr.io/your-org/megascope"` | Image repository. Publish your own (`docker build -t <repo> .`) or point at a registry mirror. |
+| image.repository | string | `"ghcr.io/petzkod5/megascope"` | Image repository. Defaults to the chart's published image; override to point at a fork's image or a registry mirror. |
 | image.tag | string | `""` | Image tag. Defaults to the chart's `appVersion` when empty. |
 | imagePullSecrets | list | `[]` | Image pull secrets for private registries. |
 | ingress.annotations | object | `{}` | Annotations for the Ingress. |

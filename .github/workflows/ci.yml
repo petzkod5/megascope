@@ -52,6 +52,7 @@ jobs:
       - uses: azure/setup-helm@v5
       - run: helm lint charts/megascope
       - run: helm template megascope charts/megascope --namespace megascope > /dev/null
+      - run: helm package charts/megascope --destination "$RUNNER_TEMP/chart-dist"
 
   actions:
     name: actionlint

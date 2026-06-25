@@ -18,14 +18,23 @@ detail view. No manual config — new routes appear on their own.
 ```bash
 helm install megascope ./charts/megascope \
   --namespace megascope --create-namespace \
-  --set image.repository=ghcr.io/your-org/megascope \
   --set 'httproute.parentRefs[0].name=gateway' \
   --set 'httproute.parentRefs[0].namespace=gateway' \
   --set 'httproute.hostnames[0]=megascope.example.com'
 ```
 
+Or install straight from the OCI registry (no clone needed):
+
+```bash
+helm install megascope oci://ghcr.io/petzkod5/charts/megascope \
+  --version <X.Y.Z> --namespace megascope --create-namespace \
+  --set 'httproute.parentRefs[0].name=<your-gateway>' \
+  --set 'httproute.parentRefs[0].namespace=<gateway-ns>' \
+  --set 'httproute.hostnames[0]=megascope.example.com'
+```
+
 > megascope needs a published image. Build and push one first:
-> `docker build -t ghcr.io/your-org/megascope:latest . && docker push ghcr.io/your-org/megascope:latest`
+> `docker build -t ghcr.io/petzkod5/megascope:latest . && docker push ghcr.io/petzkod5/megascope:latest`
 
 ## Prerequisites
 
@@ -44,7 +53,7 @@ A minimal `my-values.yaml`:
 
 ```yaml
 image:
-  repository: ghcr.io/your-org/megascope
+  repository: ghcr.io/petzkod5/megascope
   tag: latest
 
 config:
