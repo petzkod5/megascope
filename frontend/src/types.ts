@@ -44,9 +44,18 @@ export interface Activity {
   namespace: string;
 }
 
+export interface CustomLink {
+  id: string;
+  name: string;
+  url: string;
+  icon?: string;
+  group?: string;
+}
+
 export interface State {
   cluster: Cluster;
   routes: Route[];
+  links: CustomLink[];
   activity: Activity[];
   updated_at: number;
   discovering: boolean;

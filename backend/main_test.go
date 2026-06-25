@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -168,5 +171,221 @@ func TestProbe(t *testing.T) {
 	srv.Close()
 	if st, _ := probe(client, srv.URL); st != "down" {
 		t.Errorf("closed server: got %q, want down", st)
+	}
+}
+
+func TestNormalizeLink(t *testing.T) {
+	long := strings.Repeat("a", 121)
+	cases := []struct {
+		name    string
+		in      Link
+		wantErr bool
+		wantURL string
+	}{
+		{"valid full", Link{Name: "Grafana", URL: "https://grafana.example.com", Icon: "gauge", Group: "Monitoring"}, false, "https://grafana.example.com"},
+		{"missing name", Link{Name: "", URL: "x"}, true, ""},
+		{"missing url", Link{Name: "x", URL: ""}, true, ""},
+		{"scheme-less", Link{Name: "G", URL: "grafana.local"}, false, "https://grafana.local"},
+		{"bad scheme", Link{Name: "G", URL: "ftp://x"}, true, ""},
+		{"name too long", Link{Name: long, URL: "x"}, true, ""},
+	}
+	for _, c := range cases {
+		got, err := normalizeLink(c.in)
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("%s: expected error, got nil (%+v)", c.name, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: unexpected error: %v", c.name, err)
+			continue
+		}
+		if got.URL != c.wantURL {
+			t.Errorf("%s: URL = %q, want %q", c.name, got.URL, c.wantURL)
+		}
+	}
+}
+
+func TestLinkStoreCRUD(t *testing.T) {
+	s := newLinkStore("")
+	a, _ := normalizeLink(Link{Name: "A", URL: "https://a.example.com"})
+	a.ID = randID()
+	b, _ := normalizeLink(Link{Name: "B", URL: "https://b.example.com"})
+	b.ID = randID()
+	if err := s.add(a); err != nil {
+		t.Fatalf("add a: %v", err)
+	}
+	if err := s.add(b); err != nil {
+		t.Fatalf("add b: %v", err)
+	}
+	ls := s.list()
+	if len(ls) != 2 {
+		t.Fatalf("list len = %d, want 2", len(ls))
+	}
+	for _, l := range ls {
+		if l.ID == "" {
+			t.Errorf("link %q has empty ID", l.Name)
+		}
+	}
+	upd := a
+	upd.Name = "A2"
+	if ok, err := s.update(upd); err != nil || !ok {
+		t.Fatalf("update existing: ok=%v err=%v", ok, err)
+	}
+	found := false
+	for _, l := range s.list() {
+		if l.ID == a.ID && l.Name == "A2" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("update did not change name")
+	}
+	if ok, _ := s.update(Link{ID: "nope", Name: "x"}); ok {
+		t.Error("update unknown returned found=true")
+	}
+	if ok, err := s.remove(a.ID); err != nil || !ok {
+		t.Fatalf("remove existing: ok=%v err=%v", ok, err)
+	}
+	if len(s.list()) != 1 {
+		t.Errorf("after remove len = %d, want 1", len(s.list()))
+	}
+	if ok, _ := s.remove("nope"); ok {
+		t.Error("remove unknown returned found=true")
+	}
+}
+
+func TestLinkStorePersistence(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "links.json")
+	s := newLinkStore(path)
+	l, _ := normalizeLink(Link{Name: "Grafana", URL: "https://grafana.example.com"})
+	l.ID = randID()
+	if err := s.add(l); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected file at %s: %v", path, err)
+	}
+	s2 := newLinkStore(path)
+	ls := s2.list()
+	if len(ls) != 1 || ls[0].Name != "Grafana" {
+		t.Fatalf("reloaded links = %+v, want one Grafana", ls)
+	}
+}
+
+func TestLinksHTTP(t *testing.T) {
+	mux := http.NewServeMux()
+	registerLinkRoutes(mux, newLinkStore(""))
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	decode := func(r *http.Response) []Link {
+		t.Helper()
+		var body struct {
+			Links []Link `json:"links"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		r.Body.Close()
+		return body.Links
+	}
+
+	resp, err := http.Post(srv.URL+"/api/links", "application/json", strings.NewReader(`{"name":"Grafana","url":"grafana.example.com"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST status = %d, want 201", resp.StatusCode)
+	}
+	links := decode(resp)
+	if len(links) != 1 || links[0].ID == "" || links[0].URL != "https://grafana.example.com" {
+		t.Fatalf("POST body = %+v", links)
+	}
+	id := links[0].ID
+
+	resp, err = http.Post(srv.URL+"/api/links", "application/json", strings.NewReader(`{"url":"x"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("POST invalid status = %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp, err = http.Get(srv.URL + "/api/links")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET status = %d, want 200", resp.StatusCode)
+	}
+	if got := decode(resp); len(got) != 1 {
+		t.Fatalf("GET len = %d, want 1", len(got))
+	}
+
+	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/links/"+id, strings.NewReader(`{"name":"Graf2","url":"grafana.example.com"}`))
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PUT status = %d, want 200", resp.StatusCode)
+	}
+	if got := decode(resp); len(got) != 1 || got[0].Name != "Graf2" {
+		t.Fatalf("PUT body = %+v", got)
+	}
+
+	req, _ = http.NewRequest(http.MethodPut, srv.URL+"/api/links/does-not-exist", strings.NewReader(`{"name":"x","url":"x.example.com"}`))
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("PUT unknown status = %d, want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/links/"+id, nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("DELETE status = %d, want 200", resp.StatusCode)
+	}
+	if got := decode(resp); len(got) != 0 {
+		t.Fatalf("DELETE body len = %d, want 0", len(got))
+	}
+
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/links/does-not-exist", nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("DELETE unknown status = %d, want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestLinksHTTPBodyLimit(t *testing.T) {
+	mux := http.NewServeMux()
+	registerLinkRoutes(mux, newLinkStore(""))
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// A body well over the 1 MiB MaxBytesReader cap is rejected before it can
+	// exhaust memory; the decode fails and the handler returns 400.
+	huge := `{"name":"` + strings.Repeat("a", 2<<20) + `","url":"x.example.com"}`
+	resp, err := http.Post(srv.URL+"/api/links", "application/json", strings.NewReader(huge))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("oversized body status = %d, want 400", resp.StatusCode)
 	}
 }

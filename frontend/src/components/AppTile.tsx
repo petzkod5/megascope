@@ -1,5 +1,6 @@
 import React from "react";
 import { StatusDot } from "./StatusDot";
+import { Ico } from "./Ico";
 import type { Status } from "../types";
 
 /* AppTile — one discovered route, as a dense status-led data row. Left status
@@ -8,6 +9,7 @@ export function AppTile({
   name,
   host,
   namespace,
+  kind = "route",
   status = "up",
   latency,
   icon = null,
@@ -20,6 +22,7 @@ export function AppTile({
   name: string;
   host?: string;
   namespace?: string;
+  kind?: "route" | "link";
   status?: Status;
   latency?: number | null;
   icon?: React.ReactNode;
@@ -31,14 +34,16 @@ export function AppTile({
 }) {
   const [hover, setHover] = React.useState(false);
   const markerColor =
-    {
-      up: "var(--accent)",
-      down: "var(--red)",
-      warn: "var(--amber)",
-      discovering: "var(--cyan)",
-      unknown: "var(--text-faint)",
-    }[status] || "var(--text-faint)";
-  const dead = status === "down";
+    kind === "link"
+      ? "var(--text-faint)"
+      : {
+          up: "var(--accent)",
+          down: "var(--red)",
+          warn: "var(--amber)",
+          discovering: "var(--cyan)",
+          unknown: "var(--text-faint)",
+        }[status] || "var(--text-faint)";
+  const dead = kind === "route" && status === "down";
   const mono = monogram || (name ? name.charAt(0).toUpperCase() : "?");
 
   return (
@@ -118,28 +123,36 @@ export function AppTile({
       </span>
 
       <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "5px", flex: "none" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-          <StatusDot status={status} size={7} />
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "10px",
-              fontWeight: 700,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: markerColor,
-            }}
-          >
-            {status}
+        {kind === "link" ? (
+          <span style={{ display: "inline-flex", color: "var(--text-faint)" }}>
+            <Ico name="external-link" size={13} />
           </span>
-        </span>
-        {latency != null ? (
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
-            {latency}ms
-          </span>
-        ) : namespace ? (
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-faint)" }}>{namespace}</span>
-        ) : null}
+        ) : (
+          <>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <StatusDot status={status} size={7} />
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: markerColor,
+                }}
+              >
+                {status}
+              </span>
+            </span>
+            {latency != null ? (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
+                {latency}ms
+              </span>
+            ) : namespace ? (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-faint)" }}>{namespace}</span>
+            ) : null}
+          </>
+        )}
       </span>
     </a>
   );

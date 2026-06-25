@@ -44,6 +44,10 @@ spec:
               value: {{ .Values.config.probeHealth | quote }}
             - name: POLL_SECONDS
               value: {{ .Values.config.pollSeconds | quote }}
+            {{- if .Values.persistence.enabled }}
+            - name: LINKS_FILE
+              value: {{ printf "%s/links.json" .Values.persistence.mountPath | quote }}
+            {{- end }}
             {{- with .Values.config.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -61,6 +65,17 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+          {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-links" (include "megascope.fullname" .)) }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
