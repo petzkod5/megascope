@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" width="96" alt="megascope logo" />
+  <img src="docs/logo.png" width="96" alt="megascope logo" />
 </p>
 
 <h1 align="center">megascope</h1>
