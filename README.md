@@ -112,25 +112,19 @@ cd frontend && npm install && npm run dev                    # open the printed 
 Without `KUBE_API` and outside the cluster, the backend still serves but
 discovery is disabled (empty portal) — fine for checking the UI.
 
-## Build
+## Build & release
 
-CI builds and publishes the image automatically. The
-[`build`](.github/workflows/build.yml) workflow builds a multi-arch
-(`linux/amd64,linux/arm64`) image and pushes it to
-`ghcr.io/<owner>/megascope` on every push to `main` (tagged `latest`) and on
-version tags (`vX.Y.Z`). Pull requests build only.
+The [`build`](.github/workflows/build.yml) workflow builds a multi-arch
+(`linux/amd64,linux/arm64`) image and pushes it to `ghcr.io/<owner>/megascope`
+on every push to `main` (tagged `latest`); pull requests build only.
 
-On `v*` tags the [`chart-publish`](.github/workflows/build.yml) job also packages the
-Helm chart and pushes it to `oci://ghcr.io/<owner>/charts/megascope` (chart version = tag).
-
-Versioning and releases are automated with
-[release-please](https://github.com/googleapis/release-please). Pushes to `main`
-run the [`release`](.github/workflows/release.yml) workflow, which maintains a
-**release PR** that bumps the version files and `CHANGELOG.md` from
-[Conventional Commits](https://www.conventionalcommits.org/). Merging that PR
-cuts the `vX.Y.Z` tag + GitHub Release and publishes the image and chart above —
-all with the default `GITHUB_TOKEN` (no personal access token, and the version
-bump goes through the reviewed release PR rather than a direct push to `main`).
+Releases are automated with
+[release-please](https://github.com/googleapis/release-please): pushes to `main`
+keep an open **release PR** that bumps the version files and `CHANGELOG.md` from
+[Conventional Commits](https://www.conventionalcommits.org/). Merging it tags
+`vX.Y.Z`, publishes the versioned image and the Helm chart
+(`oci://ghcr.io/<owner>/charts/megascope`), and creates the GitHub Release. See
+[CONTRIBUTING](CONTRIBUTING.md) for the commit conventions.
 
 To build locally:
 
