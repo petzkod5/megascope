@@ -11,6 +11,7 @@ import {
   Link,
   ExternalLink,
   Copy,
+  Info,
   type LucideProps,
 } from "lucide-react";
 import dynamicIconImports from "lucide-react/dynamicIconImports";
@@ -35,6 +36,7 @@ const STATIC: Record<string, ComponentType<LucideProps>> = {
   link: Link,
   "external-link": ExternalLink,
   copy: Copy,
+  info: Info,
 };
 
 const loaders = dynamicIconImports as unknown as Record<

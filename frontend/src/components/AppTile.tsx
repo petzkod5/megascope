@@ -14,6 +14,7 @@ export function AppTile({
   monogram,
   href,
   onClick,
+  onContextMenu,
   style,
 }: {
   name: string;
@@ -25,6 +26,7 @@ export function AppTile({
   monogram?: string;
   href?: string;
   onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  onContextMenu?: React.MouseEventHandler<HTMLAnchorElement>;
   style?: React.CSSProperties;
 }) {
   const [hover, setHover] = React.useState(false);
@@ -43,6 +45,7 @@ export function AppTile({
     <a
       href={href}
       onClick={onClick}
+      onContextMenu={onContextMenu}
       target={href ? "_blank" : undefined}
       rel="noreferrer"
       onMouseEnter={() => setHover(true)}
